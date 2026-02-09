@@ -1,7 +1,10 @@
 import inspect
 import json
+import logging
 import os
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 from inspect import iscoroutinefunction
 from typing import (
     Any,
@@ -114,6 +117,9 @@ async def agent_loop(
 
     assert os.getenv("DASHSCOPE_API_KEY"), "DASHSCOPE_API_KEY is not set"
 
+    # 模型：通过环境变量 DASHSCOPE_MODEL 指定，默认 qwen-plus。可选 qwen-turbo、qwen-plus、qwen-max 等。
+    model_name = os.getenv("DASHSCOPE_MODEL", "qwen-plus")
+
     client = AsyncOpenAI(
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         api_key=os.getenv("DASHSCOPE_API_KEY"),
@@ -159,15 +165,19 @@ async def agent_loop(
 
     tool_functions_map = {func.__name__: func for func in llm_tools}
 
-    params = {
-        "model": "qwen-plus",
-        "stream": True,
-        "tools": tool_schema,
-    }
+    # 仅使用基础对话+工具调用，不传 enable_search / extra_body，即未使用百炼自带联网搜索（赛题禁止）。
 
     # Main Agent Loop: continues as long as the model requests tool executions
     while True:
-        # Make the streaming request
+        params = {
+            "model": model_name,
+            "stream": True,
+            "tools": tool_schema,
+        }
+        # 第一步强制调用 web_search，确保每次请求至少进行一次联网搜索
+        if step_index == 0:
+            params["tool_choice"] = {"type": "function", "function": {"name": "web_search"}}
+
         stream = await client.chat.completions.create(
             messages=prompt_messages, **params
         )
@@ -256,6 +266,11 @@ async def agent_loop(
 
                 # Execute the function if it exists
                 if func_name in tool_functions_map:
+                    if func_name == "web_search":
+                        logger.info(
+                            "[Research Agent] web_search 被调用: query=%s",
+                            parsed_args.get("query", ""),
+                        )
                     func = tool_functions_map[func_name]
                     # Note: If tools are async, use await
                     if iscoroutinefunction(func):

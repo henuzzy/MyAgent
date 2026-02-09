@@ -1,5 +1,23 @@
-.output
+.output/
 
 .env
 
-.idea
+.idea/
+
+.vscode/
+
+.pytest_cache/
+
+.ruff_cache/
+
+.mypy_cache/
+
+.DS_Store
+
+datasets/
+
+__pycache__/
+
+run_validation.py
+
+.venv/

@@ -2,17 +2,44 @@
 
 这是一个基于 LLM 的 Agent 示例，演示了如何借助 LLM Function Calling 实现 Agent Loop，并通过集成 [Agent Skills](https://agentskills.io) 规范，实现一个支持工具调用的可扩展 Agent。
 
+## 如何启动项目
+
+1. **安装依赖**（在项目根目录执行）：
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **配置环境变量**：在项目根目录创建 `.env` 文件，至少填写百炼 API Key；若需联网搜索，可再填 SerpAPI 或 Bing 的 Key：
+   ```text
+   DASHSCOPE_API_KEY=sk-你的百炼Key
+   SERPAPI_API_KEY=你的SerpAPI_Key   # 可选，用于 Research Agent 联网搜索
+   # DASHSCOPE_MODEL=qwen-plus      # 可选，不写则默认 qwen-plus
+   ```
+
+3. **启动服务**：
+   ```bash
+   uvicorn agent:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+4. 浏览器访问 **http://localhost:8000/docs** 可查看并调试 API；或使用：
+   ```bash
+   curl -X POST "http://localhost:8000/" -H "Content-Type: application/json" -d "{\"question\": \"法国首都在哪里？\"}"
+   ```
+
+更详细的本地运行说明见下方 [本地运行](#本地运行) 小节。
+
 ## 代码结构
 
 项目结构如下：
 
 ```plain
 project/
-├── agent.py          # 必需：默认的 entrypoint，提供 FastAPI app
-├── agent_loop.py     # Agent Loop 核心逻辑，处理 LLM 调用和工具执行
-├── agui.py           # AG-UI Protocol 事件流转换，将AgentLoop的输出转换为AG-UI Protocol事件流
-├── skills.py         # Agent Skills 集成模块，提供技能发现、加载和执行功能
-├── skills/           # 技能目录，存放各个技能
+├── agent.py          # 入口：FastAPI app，Research Agent 接口与答案归一化
+├── agent_loop.py     # Agent Loop：LLM 与工具执行，模型由 DASHSCOPE_MODEL 指定
+├── agui.py           # AG-UI Protocol 事件流转换
+├── research_utils.py  # Research Agent：答案归一化、系统提示、联网搜索 web_search
+├── skills.py         # Agent Skills 集成
+├── skills/           # 技能目录
 │   ├── get-current-time/
 │   │   ├── SKILL.md
 │   │   └── scripts/
@@ -85,6 +112,18 @@ description: 技能描述，说明何时使用该技能。
 
 本示例使用阿里云百炼模型服务，请通过环境变量配置相应的 API Key（`DASHSCOPE_API_KEY`）。你可以通过`.env`文件，或是在代码中配置环境变量。
 
+### 如何确认使用的是哪个模型、是否用了百炼自带搜索
+
+- **当前使用的模型**：在 `agent_loop.py` 中，模型名由环境变量 **`DASHSCOPE_MODEL`** 决定；未设置时默认为 **`qwen-plus`**。在项目根目录的 `.env` 里可写：
+  ```bash
+  DASHSCOPE_MODEL=qwen-plus
+  ```
+  或改为 `qwen-turbo`、`qwen-max` 等百炼支持的模型名。在代码里也可直接搜索 `model_name` 或 `DASHSCOPE_MODEL` 确认实际取值。
+
+- **是否使用了百炼自带的联网搜索/网页抓取**：本仓库**没有**使用。百炼若开启自带搜索，需要在请求里传 `enable_search: true` 或 `extra_body={"enable_search": True}`（见[阿里云文档](https://www.alibabacloud.com/help/zh/model-studio/web-search)）。本项目中调用 `client.chat.completions.create` 时**只传了 `model`、`messages`、`stream`、`tools`**，没有传 `enable_search` 或 `extra_body`，因此是纯基础模型 + 自建工具（如 `web_search`），符合赛题“禁止使用百炼自带搜索”的要求。你可在 `agent_loop.py` 中搜索 `chat.completions.create` 和 `params` 自行核对。
+
+- **如何确认是否进行了联网搜索**：`web_search` 作为工具提供给模型，**是否调用由模型决定**。启动服务后，每次模型调用 `web_search` 时，终端会输出 `[Research Agent] web_search 被调用: query=xxx`。若没有该输出，说明模型未调用搜索，直接凭记忆回答了。可尝试更换更强模型（如 `DASHSCOPE_MODEL=qwen-max`）或优化系统提示，提高模型对搜索的依赖。
+
 ## 本地运行
 
 在本地运行前需要安装依赖并配置 API Key，按以下步骤操作即可。
@@ -139,7 +178,7 @@ API Key 可在 [阿里云百炼控制台](https://bailian.console.aliyun.com/) �
 uvicorn agent:app --reload --host 0.0.0.0 --port 8000
 ```
 
-浏览器访问 `http://localhost:8000/docs` 可打开 FastAPI 自带的 API 文档并调试接口。
+浏览器访问 `` 可打开 FastAPI 自带的 API 文档并调试接口。
 
 ### 4. 快速测试
 
@@ -267,3 +306,4 @@ data: {"type": "TEXT_MESSAGE_END", "messageId": "ae5c8d44-e20a-43de-89f4-3da64e0
 data: {"type": "RUN_FINISHED", "threadId": "thread_123", "runId": "run_456"}
 
 ```
+http://localhost:8000/docs
