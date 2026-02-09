@@ -85,6 +85,70 @@ description: 技能描述，说明何时使用该技能。
 
 本示例使用阿里云百炼模型服务，请通过环境变量配置相应的 API Key（`DASHSCOPE_API_KEY`）。你可以通过`.env`文件，或是在代码中配置环境变量。
 
+## 本地运行
+
+在本地运行前需要安装依赖并配置 API Key，按以下步骤操作即可。
+
+### 1. 安装依赖
+
+建议使用虚拟环境（可选）：
+
+```bash
+# 创建虚拟环境（可选）
+python -m venv .venv
+
+# 激活虚拟环境
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+# source .venv/bin/activate
+
+# 安装项目依赖
+pip install -r requirements.txt
+```
+
+### 2. 配置 API Key
+
+本示例使用阿里云百炼（DashScope）模型，需要先设置环境变量 `DASHSCOPE_API_KEY`：
+
+- **方式一**：在项目根目录创建 `.env` 文件（不要提交到 Git），内容示例：
+  ```text
+  DASHSCOPE_API_KEY=sk-xxxxxxxx
+  ```
+  若使用 `python-dotenv`，可在 `agent.py` 开头加载：`load_dotenv()`。
+
+- **方式二**：在终端中临时设置后启动：
+  ```bash
+  # Windows PowerShell
+  $env:DASHSCOPE_API_KEY="sk-xxxxxxxx"
+
+  # Windows CMD
+  set DASHSCOPE_API_KEY=sk-xxxxxxxx
+
+  # macOS/Linux
+  export DASHSCOPE_API_KEY=sk-xxxxxxxx
+  ```
+
+API Key 可在 [阿里云百炼控制台](https://bailian.console.aliyun.com/) 获取。
+
+### 3. 启动服务
+
+在项目根目录执行：
+
+```bash
+uvicorn agent:app --reload --host 0.0.0.0 --port 8000
+```
+
+浏览器访问 `http://localhost:8000/docs` 可打开 FastAPI 自带的 API 文档并调试接口。
+
+### 4. 快速测试
+
+```bash
+curl -X POST "http://localhost:8000/" \
+  -H "Content-Type: application/json" \
+  -d "{\"question\": \"北京今天天气怎么样？\"}"
+```
+
 ## 开发调试
 
 ### 基于 OpenAPI 的调试开发
