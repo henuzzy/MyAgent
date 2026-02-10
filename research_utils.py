@@ -45,6 +45,126 @@ SEARCH_RESULTS_HEADER = "Use the exact full names and terms as they appear below
 DEFAULT_NUM_RESULTS = 8
 
 
+_LANG_TO_BING_MKT = {
+    "zh": "zh-CN",
+    "en": "en-US",
+    "ja": "ja-JP",
+    "ko": "ko-KR",
+    "fr": "fr-FR",
+    "de": "de-DE",
+    "es": "es-ES",
+}
+
+
+def web_search_raw(query: str, language: str = "en", num_results: int = DEFAULT_NUM_RESULTS) -> list:
+    """
+    返回结构化搜索结果（title/snippet/url），供 Plan-and-Solve 的 SEARCH/VERIFY 使用。
+    - SEARCH 阶段必须严格使用 PLAN 指定的 language
+    - 本函数不会翻译 query，不会混用语言
+    """
+    language = (language or "en").strip().lower()
+    num_results = min(max(1, int(num_results or DEFAULT_NUM_RESULTS)), 10)
+
+    # Bing API
+    bing_key = os.getenv("BING_API_KEY")
+    if bing_key:
+        try:
+            import urllib.parse
+            import urllib.request
+
+            endpoint = "https://api.bing.microsoft.com/v7.0/search"
+            params = {
+                "q": query,
+                "count": num_results,
+                "mkt": _LANG_TO_BING_MKT.get(language, "en-US"),
+            }
+            url = f"{endpoint}?{urllib.parse.urlencode(params)}"
+            req = urllib.request.Request(url)
+            req.add_header("Ocp-Apim-Subscription-Key", bing_key)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                import json as _json
+
+                data = _json.loads(resp.read().decode())
+            values = data.get("webPages", {}).get("value", []) or []
+            out = []
+            for r in values[:num_results]:
+                out.append(
+                    {
+                        "title": r.get("name", ""),
+                        "snippet": r.get("snippet", ""),
+                        "url": r.get("url", ""),
+                        "source": "bing",
+                        "language": language,
+                    }
+                )
+            return out
+        except Exception as e:
+            return [
+                {
+                    "title": "BING_ERROR",
+                    "snippet": str(e),
+                    "url": "",
+                    "source": "bing",
+                    "language": language,
+                }
+            ]
+
+    # SerpAPI
+    serpapi_key = os.getenv("SERPAPI_API_KEY")
+    if serpapi_key:
+        try:
+            import urllib.parse
+            import urllib.request
+
+            # SerpAPI 参数参考：hl 控制界面语言；lr 可选语言限制，这里尽量温和不强锁。
+            hl = {"zh": "zh-cn", "en": "en", "ja": "ja", "ko": "ko"}.get(language, "en")
+            params = {
+                "q": query,
+                "api_key": serpapi_key,
+                "num": num_results,
+                "hl": hl,
+            }
+            url = "https://serpapi.com/search?" + urllib.parse.urlencode(params)
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                import json as _json
+
+                data = _json.loads(resp.read().decode())
+            results = data.get("organic_results", []) or []
+            out = []
+            for r in results[:num_results]:
+                out.append(
+                    {
+                        "title": r.get("title", ""),
+                        "snippet": r.get("snippet", ""),
+                        "url": r.get("link", ""),
+                        "source": "serpapi",
+                        "language": language,
+                    }
+                )
+            return out
+        except Exception as e:
+            return [
+                {
+                    "title": "SERPAPI_ERROR",
+                    "snippet": str(e),
+                    "url": "",
+                    "source": "serpapi",
+                    "language": language,
+                }
+            ]
+
+    return [
+        {
+            "title": "NO_SEARCH_KEY",
+            "snippet": "No BING_API_KEY or SERPAPI_API_KEY configured.",
+            "url": "",
+            "source": "none",
+            "language": language,
+        }
+    ]
+
+
 def web_search(query: str, num_results: int = DEFAULT_NUM_RESULTS) -> str:
     """
     联网搜索。赛题允许：阿里云 IQS、SerpAPI、Bing 等；禁止使用百炼自带的搜索。
@@ -58,67 +178,13 @@ def web_search(query: str, num_results: int = DEFAULT_NUM_RESULTS) -> str:
         body = "\n\n".join(parts)
         return SEARCH_RESULTS_HEADER + body if body else "No search results found."
 
-    # 优先使用 Bing API
-    bing_key = os.getenv("BING_API_KEY")
-    if bing_key:
-        try:
-            import urllib.parse
-            import urllib.request
-            endpoint = "https://api.bing.microsoft.com/v7.0/search"
-            params = {
-                "q": query,
-                "count": num_results,
-                "mkt": "zh-CN",
-            }
-            url = f"{endpoint}?{urllib.parse.urlencode(params)}"
-            req = urllib.request.Request(url)
-            req.add_header("Ocp-Apim-Subscription-Key", bing_key)
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                import json as _json
-                data = _json.loads(resp.read().decode())
-            results = data.get("webPages", {}).get("value", [])
-            if not results:
-                return "No search results found."
-            parts = []
-            for i, r in enumerate(results[:num_results], 1):
-                title = r.get("name", "")
-                snippet = r.get("snippet", "")
-                url_link = r.get("url", "")
-                parts.append(f"[{i}] {title}\n{snippet}\nURL: {url_link}")
-            return _format_results(parts)
-        except Exception as e:
-            return f"Bing search error: {str(e)}"
-    
-    # 备选：SerpAPI
-    serpapi_key = os.getenv("SERPAPI_API_KEY")
-    if serpapi_key:
-        try:
-            import urllib.parse
-            import urllib.request
-            params = {
-                "q": query,
-                "api_key": serpapi_key,
-                "num": num_results,
-            }
-            url = "https://serpapi.com/search?" + urllib.parse.urlencode(params)
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                import json as _json
-                data = _json.loads(resp.read().decode())
-            results = data.get("organic_results", [])
-            if not results:
-                return "No search results found."
-            parts = []
-            for i, r in enumerate(results[:num_results], 1):
-                title = r.get("title", "")
-                snippet = r.get("snippet", "")
-                link = r.get("link", "")
-                parts.append(f"[{i}] {title}\n{snippet}\nURL: {link}")
-            return _format_results(parts)
-        except Exception as e:
-            return f"SerpAPI search error: {str(e)}"
-    
-    return (
-        "Error: No search API key configured. Set BING_API_KEY or SERPAPI_API_KEY in .env. "
-        "Bing API: https://azure.microsoft.com/services/cognitive-services/bing-web-search-api/"
-    )
+    # 保持旧工具调用的兼容：默认用中文市场（zh-CN）进行展示型搜索
+    raw = web_search_raw(query=query, language="zh", num_results=num_results)
+    if raw and raw[0].get("title") in {"BING_ERROR", "SERPAPI_ERROR", "NO_SEARCH_KEY"}:
+        return f"Search error: {raw[0].get('snippet', '')}"
+    parts = []
+    for i, r in enumerate(raw[:num_results], 1):
+        parts.append(
+            f"[{i}] {r.get('title','')}\n{r.get('snippet','')}\nURL: {r.get('url','')}"
+        )
+    return _format_results(parts)

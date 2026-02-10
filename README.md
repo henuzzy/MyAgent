@@ -28,6 +28,22 @@
 
 更详细的本地运行说明见下方 [本地运行](#本地运行) 小节。
 
+## Plan-and-Solve Research Agent（含显式搜索语言选择）
+
+本项目的 `/` 接口已升级为严格的 **PLAN → SEARCH → VERIFY → SOLVE** 流程，并加入“搜索语言选择”机制：
+
+- **PLAN（LLM，无网络/无工具）**：输出结构化 PLAN JSON，显式给出 `primary_language` / `secondary_languages`，并为每个子任务指定 `search_language` 和该语言下的 `suggested_queries`。
+- **SEARCH（仅工具）**：严格按照 PLAN 指定语言执行搜索（不盲翻，不混用语言），收集带 URL 的原始证据。
+- **VERIFY（LLM，无工具）**：对照约束检查证据，做语言/来源一致性校验，输出约束满足日志与候选项评分。
+- **SOLVE（LLM，无工具）**：只输出最终答案文本（与问题语言一致），且只来源于 VERIFY 的 `best_candidate`。
+
+### Traceability（可追踪性）
+
+- 每次调用 `POST /` 会在响应头中返回 `X-Trace-Id`。
+- 可通过调试接口获取完整 trace（语言选择理由、不同语言证据、约束日志等）：
+  - `GET /trace/{trace_id}`
+- trace 也会写入本地文件：`.output/traces/{trace_id}.json`
+
 ## 代码结构
 
 项目结构如下：

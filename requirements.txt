@@ -8,3 +8,4 @@ pydantic>=2.0.0
 PyYAML>=6.0
 ag-ui-protocol>=0.1.0
 python-dotenv>=1.0.0
+requests>=2.28.0

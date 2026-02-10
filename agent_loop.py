@@ -118,10 +118,11 @@ async def agent_loop(
     assert os.getenv("DASHSCOPE_API_KEY"), "DASHSCOPE_API_KEY is not set"
 
     # 模型：通过环境变量 DASHSCOPE_MODEL 指定，默认 qwen-plus。可选 qwen-turbo、qwen-plus、qwen-max 等。
-    model_name = os.getenv("DASHSCOPE_MODEL", "qwen-plus")
+    model_name = os.getenv("DASHSCOPE_MODEL", "qwen3-max-preview")
 
     client = AsyncOpenAI(
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        # base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        base_url = "https://apis.iflow.cn/v1",
         api_key=os.getenv("DASHSCOPE_API_KEY"),
     )
 
